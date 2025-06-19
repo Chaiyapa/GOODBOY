@@ -1,0 +1,66 @@
+//@version=6
+indicator("Premium Smart V3 RC2 🚀 Major Shift Only EURAUD/EURUSD", overlay=true)
+
+// === INPUTS ===
+emaLen      = input.int(9, title="EMA Length")
+atrLen      = input.int(14, title="ATR Length")
+atrMult     = input.float(1.5, title="ATR Multiplier")
+adxLen      = input.int(14, title="ADX Length")
+adxThresh   = input.float(25.0, title="ADX Threshold")  // เน้นมั่นใจมาก
+rsiLen      = input.int(14, title="RSI Length")
+rsiBuyLevel = input.float(58.0, title="RSI Buy Threshold")  // ดันให้กรองดีขึ้น
+rsiSellLevel= input.float(42.0, title="RSI Sell Threshold")
+htf_tf      = input.timeframe("15", title="HTF Confirm TF")
+
+// === CALCULATIONS ===
+ema  = ta.ema(close, emaLen)
+atr  = ta.atr(atrLen)
+rsi  = ta.rsi(close, rsiLen)
+ema_htf = request.security(syminfo.tickerid, htf_tf, ta.ema(close, emaLen))
+
+// === CUSTOM ADX ===
+upMove   = high - high[1]
+downMove = low[1] - low
+plusDM   = na(upMove) ? na : (upMove > downMove and upMove > 0 ? upMove : 0)
+minusDM  = na(downMove) ? na : (downMove > upMove and downMove > 0 ? downMove : 0)
+trur     = ta.rma(ta.tr(true), adxLen)
+plusDI   = 100 * ta.rma(plusDM, adxLen) / trur
+minusDI  = 100 * ta.rma(minusDM, adxLen) / trur
+dx       = 100 * math.abs(plusDI - minusDI) / (plusDI + minusDI)
+adx      = ta.rma(dx, adxLen)
+
+// === SuperTrend ===
+upperBand = hl2 + atrMult * atr
+lowerBand = hl2 - atrMult * atr
+var float trendUp = na
+var float trendDown = na
+trendUp   := na(trendUp)   ? lowerBand : (close[1] > trendUp ? math.max(lowerBand, trendUp) : lowerBand)
+trendDown := na(trendDown) ? upperBand : (close[1] < trendDown ? math.min(upperBand, trendDown) : upperBand)
+var float trend = na
+trend := close > trendDown ? 1 : close < trendUp ? -1 : nz(trend)
+
+// === HTF Trend Confirm ===
+htfTrend = close > ema_htf ? 1 : -1
+
+// === Structure BMS / CHoCH ===
+swingHigh = ta.highest(high, 10)
+swingLow  = ta.lowest(low, 10)
+
+// === Shift Condition ===
+bmsBuy  = (low > swingLow[1]) and (close > ema) and (trend > 0) and (rsi > rsiBuyLevel) and (adx > adxThresh) and (htfTrend > 0)
+bmsSell = (high < swingHigh[1]) and (close < ema) and (trend < 0) and (rsi < rsiSellLevel) and (adx > adxThresh) and (htfTrend < 0)
+
+// === PLOT SHIFT ===
+var label shiftLabel = na
+
+if (bmsBuy)
+    label.delete(shiftLabel)
+    shiftLabel := label.new(bar_index, high, "🟢", color=color.green, textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if (bmsSell)
+    label.delete(shiftLabel)
+    shiftLabel := label.new(bar_index, low, "🔴", color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// === ALERT ===
+alertcondition(bmsBuy, title="Shift UP Alert", message="🟢 Premium Smart V3: โอกาสเปลี่ยนขาขึ้น (มั่นใจมาก)!")
+alertcondition(bmsSell, title="Shift DOWN Alert", message="🔴 Premium Smart V3: โอกาสเปลี่ยนขาลง (มั่นใจมาก)!")
